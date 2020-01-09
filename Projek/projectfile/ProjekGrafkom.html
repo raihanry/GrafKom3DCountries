@@ -1,0 +1,365 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>National Flag</title>
+	<link rel="stylesheet" type="text/css" href="main.css">
+    <script src="../libs/three.js"></script>
+    <script src="../libs/dat.gui.min.js"></script>
+    <script src="../libs/stats.min.js"></script>
+
+    <script src="../libs/CSS3DRenderer.js"></script> 
+    <script src="../libs/OrbitControls.js"></script>
+    <script src="../libs/tween.js"></script>
+
+    <style>
+        body {
+            /* atur margin ke 0 dan overflow menjadi tersembunyi, untuk layar penuh*/
+            margin: 0;
+            overflow: hidden;
+            background-image: url("FIXFIXFIX.jpg");
+        }
+
+        #someidentifier {
+            position: fixed;
+            z-index: 100;
+            bottom: 0;
+            left: 0;
+            width: 100%;
+            background-color: black;
+            opacity: 0.7;
+            color: #ffffff;
+            font-family: Calibri;
+        }
+
+        #query {
+            margin-left: 5px;
+        }
+    </style>
+</head>
+<script>
+
+// global variables
+var renderer;
+var scene;
+var camera;
+var control;
+var controls;
+var stats;
+
+var offset = 40;
+var offscreen = new THREE.Vector3(1000, 0, 1000);
+var currentElements = [];
+var newlyAddedElements = [];
+var toBeRemovedElements = [];
+var positionAndRotation = [];
+
+/**
+ * Menginisialisasi adegan, kamera, dan objek. Disebut ketika jendela
+ * dimuat dengan menggunakan window
+ */
+function init() {
+
+    // buat pemandangan, yang akan menampung semua elemen kita seperti benda, kamera dan lampu.
+    scene = new THREE.Scene();
+
+    // buat kamera, yang menentukan di mana kita sedang melihat.
+    camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 1000);
+
+    // buat render, atur warna latar belakang dan ukurannya
+
+    renderer = new THREE.CSS3DRenderer();
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    renderer.domElement.style.position = 'absolute';
+    renderer.domElement.style.top = 0;
+
+    // posisikan dan arahkan kamera ke tengah adegan
+    camera.position.x = 1200;
+    camera.position.y = 1200;
+    camera.position.z = 1200;
+    camera.lookAt(scene.position);
+
+    controls = new THREE.OrbitControls(camera, renderer.domElement);
+    controls.autoRotate = true;
+
+
+    // mengatur objek kontrol untuk gui kontrol
+//THREE.CylinderGeometry( radiusTop, radiusBottom, height, segmentsRadius, segmentsHeight, openEnded );
+
+    control = new function () {
+        this.bentukKubus = function (e) {
+            updateStructure(new THREE.BoxGeometry(20, 14, 20, 5, 3, 5), 40);
+        };
+        this.bentukTabung = function () {
+            updateStructure(new THREE.CylinderGeometry(12, 12, 27, 15, 3, true), 40);
+        };
+        this.bentukBola = function () {
+            updateStructure(new THREE.SphereGeometry(17, 10, 10), 40);
+        };
+        this.bentukDonat = function () {
+            updateStructure(new THREE.PlaneGeometry(30, 30, 8, 8), 40);
+            updateStructure(new THREE.TorusGeometry(20,10,8,10),25);
+
+        };
+    };
+
+    // add extras
+
+    addStatsObject();
+
+
+    // tambahkan output dari renderer ke elemen html
+    document.body.appendChild(renderer.domElement);
+
+    addControlGui(control);
+
+
+    updateStructure(new THREE.PlaneGeometry(30, 30, 8, 8), 40);
+    // panggil fungsi render, setelah render pertama, interval ditentukan
+    // oleh requestAnimationFrame
+    render();
+}
+
+function createCSS3DObject(iFace) {
+    var div = document.createElement('div');
+    var img = document.createElement('img');
+
+    var nrString = ("000" + iFace * 1).substr(-3, 3);
+    img.src = '../assets/Bendera/NEGARA-' + nrString + ".png";
+    img.width = 140;
+
+
+    div.appendChild(img);
+    div.style.opacity = 0.8;
+
+    var object = new THREE.CSS3DObject(div);
+    object.name = 'test';
+
+    return object;
+}
+
+function updateStructure(geometry, offset) {
+    // dapatkan posisi di mana kita perlu memindahkan elemen
+    positionAndRotation = getPositionAndRotation(geometry, offset);
+
+    // tweein, akan digunakan untuk membuat semua elemen baru
+    
+    var tweenIn = new TWEEN.Tween({opacity: 0})
+            .to({pos: 1.0}, 3000)
+            .easing(TWEEN.Easing.Sinusoidal.InOut)
+            .onUpdate(function () {
+                var toSet = this.pos;
+                newlyAddedElements.forEach(function (cssObject) {
+                    cssObject.element.style.opacity = toSet;
+                });
+
+                var i = 0;
+                currentElements.forEach(function (cssObject) {
+                    // dapatkan elemen posisi awal dan posisi target
+                    var currentPos = positionAndRotation[i].currentPos;
+                    var targetPos = positionAndRotation[i].pos;
+
+                    // juga mendapatkan elemen mulai rotasi dan akhir rotasi
+                    var currentRotation = positionAndRotation[i].currentRotation;
+                    var targetRotation = new THREE.Euler();
+                    targetRotation.setFromRotationMatrix(positionAndRotation[i].rot);
+
+                    // gunakan tween(smooth animasi) untuk memindahkan elemen secara perlahan.
+                    if (currentPos) {
+                        cssObject.position.x = currentPos.x + (targetPos.x - currentPos.x) * toSet;
+                        cssObject.position.y = currentPos.y + (targetPos.y - currentPos.y) * toSet;
+                        cssObject.position.z = currentPos.z + (targetPos.z - currentPos.z) * toSet;
+
+                        cssObject.rotation.x = currentRotation.x + (targetRotation.x - currentRotation.x) * toSet;
+                        cssObject.rotation.y = currentRotation.y + (targetRotation.y - currentRotation.y) * toSet;
+                        cssObject.rotation.z = currentRotation.z + (targetRotation.z - currentRotation.z) * toSet;
+                    }
+                    i++;
+                });
+            });
+
+    tweenIn.start();
+
+    // some cleanup
+    newlyAddedElements = [];
+    toBeRemovedElements = [];
+
+    // berjalan melalui set positionAndRotation dan pindahkan atau buat elemen
+    for (var i = 0; i < positionAndRotation.length; i++) {
+
+        if (currentElements.length > i) {
+            // we need to move one of the existing ones.
+            var element = currentElements[i];
+            positionAndRotation[i].currentPos = element.position.clone();
+            positionAndRotation[i].currentRotation = element.rotation.clone();
+        } else {
+            // create a new one, and set it's position of screen
+            var element = createCSS3DObject(i + 1);
+
+            element.position = offscreen.clone();
+
+            positionAndRotation[i].currentPos = element.position.clone();
+            positionAndRotation[i].currentRotation = element.rotation.clone();
+
+            // set initial opacity to 0.
+            element.element.style.opacity = 0;
+
+            // add to the array to keep track of.
+            currentElements.push(element);
+            newlyAddedElements.push(element);
+            scene.add(element);
+        }
+    }
+
+    // finally remove the elements that aren't needed anymore
+    for (var i = positionAndRotation.length; i < currentElements.length; i++) {
+        toBeRemovedElements.push(currentElements[i]);
+    }
+
+    // and remove them from the scene
+    for (var i = 0; i < toBeRemovedElements.length; i++) {
+        scene.remove(currentElements.pop());
+    }
+}
+
+
+// atur fungsi posisi dan rotasi
+function getPositionAndRotation(geometry, offset) {
+    var result = [];
+
+    for (var iFace = 0; iFace < geometry.faces.length; iFace += 2) {
+        var newPosition = new THREE.Vector3(0, 0, 0);
+
+        // get this face and the next which both make the cube
+        var face = geometry.faces[iFace];
+        var faceNext = geometry.faces[iFace + 1];
+
+        // calculate the position of where the elements need to go to.
+        var centroid = new THREE.Vector3();
+        centroid.copy( geometry.vertices[face.a] )
+                .add( geometry.vertices[face.b] )
+                .add( geometry.vertices[face.c] )
+                .add( geometry.vertices[faceNext.a] )
+                .add( geometry.vertices[faceNext.b] )
+                .add( geometry.vertices[faceNext.c] )
+                .divideScalar( 6 ).multiplyScalar(offset);
+
+        newPosition = centroid.clone();
+
+        // Now we need to rotate the div to the correct position
+        var up = new THREE.Vector3(0, 0, 1);
+
+        // we get the vector from both of the triangle, and use the average
+        var normal = new THREE.Vector3();
+        normal.addVectors(face.normal, faceNext.normal);
+        normal.divideScalar(2);
+
+        // We calculate the axis on which to rotate by
+        // selecting the cross of the vectors
+        var axis = new THREE.Vector3();
+        axis.crossVectors(up, normal);
+
+        // based on the axis, in relation to our normal vector
+        // we can calculate the angle.
+        var angle = Math.atan2(axis.length(), up.dot(normal));
+        axis.normalize();
+
+        // now we can use matrix function to rotate the object so
+        // it is aligned with the normal from the face
+        var rotationToApply = new THREE.Matrix4();
+        rotationToApply.makeRotationAxis(axis, angle);
+
+        result.push({pos: newPosition, rot: rotationToApply});
+    }
+
+    return result;
+}
+
+function getCenter(object, face) {
+
+    console.log(face);
+    var a = object.vertices[face.a];
+    var b = object.vertices[face.b];
+    var c = object.vertices[face.c];
+
+    var added = new THREE.Vector3();
+    added.add(a);
+    added.add(b);
+    added.add(c);
+
+    console.log(added);
+
+
+    return added;
+}
+
+
+function addControlGui(controlObject) {
+    var gui = new dat.GUI();
+    gui.add(controlObject, "bentukKubus");
+    gui.add(controlObject, "bentukTabung");
+    gui.add(controlObject, "bentukBola");
+    gui.add(controlObject, "bentukDonat");
+}
+
+function addStatsObject() {
+    stats = new Stats();
+    stats.setMode(0);
+
+    stats.domElement.style.position = 'absolute';
+    stats.domElement.style.left = '0px';
+    stats.domElement.style.top = '0px';
+
+    document.body.appendChild(stats.domElement);
+}
+
+
+/**
+ * Called when the scene needs to be rendered. Delegates to requestAnimationFrame
+ * for future renders
+ */
+function render() {
+
+    TWEEN.update();
+
+    // update stats
+    stats.update();
+
+    controls.update();
+
+    // and render the scene
+    renderer.render(scene, camera);
+
+    // render using requestAnimationFrame
+    requestAnimationFrame(render);
+}
+
+
+/**
+ * Function handles the resize event. This make sure the camera and the renderer
+ * are updated at the correct moment.
+ */
+function handleResize() {
+    camera.aspect = window.innerWidth / window.innerHeight;
+    camera.updateProjectionMatrix();
+    renderer.setSize(window.innerWidth, window.innerHeight);
+}
+
+function handleSubmit(e) {
+    if (e.keyCode == 13) {
+        console.log(document.getElementById("queryField").value);
+    }
+}
+
+
+// calls the init function when the window is done loading.
+window.onload = init;
+// calls the handleResize function when the window is resized
+window.addEventListener('resize', handleResize, false);
+
+
+</script>
+<body>
+
+</body>
+
+</html>
